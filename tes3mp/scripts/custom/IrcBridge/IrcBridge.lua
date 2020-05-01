@@ -78,40 +78,115 @@ s:join(channel)
 s:join(alertChannel)
 local lastMessage = ""
 
+IrcBridge.messageIsCommand = function(message)
+  local command = ""
+  
+  tes3mp.LogMessage(enumerations.log.INFO, "TESTING FOR COMMANDS\n")
+  
+  --scroll through the message untill you find the first ": ",
+  for i = 1, string.len(message) do
+    char = string.sub(message,i,i)
+		-- If "username: /" is found, set messageIsCommand to true
+		if char == ":" and string.sub(message,i+1,i+1) == " " then
+      tes3mp.LogMessage(enumerations.log.INFO, "TESTING FOR COMMANDS 2\n")
+      if string.sub(message,i+2,i+2) == "/" then
+        
+        command = string.sub(message, i+2, string.len(message))
+        
+        discordUser = string.sub(message, 1, i-1)
+        tes3mp.LogMessage(enumerations.log.INFO, "[IrcBridge] Discord User: [" .. discordUser .. "]" .. " activated command " .. command .. "\n")
+        break
+      end
+		end
+  end
+  return command
+end
+
+IrcBridge.runCommand = function(command)
+  local validCommand = false
+  
+  if command == "/list" then 
+    validCommand = true
+    tes3mp.LogMessage(enumerations.log.INFO, "[Discord Command]: /list\n")
+    
+    replyToDiscord = " - "
+    playersOnline = ""
+    for pid, player in pairs(Players) do
+      replyToDiscord = replyToDiscord .. tes3mp.GetName(pid) .. " - "
+    end
+    playersOnline = string.format("```Currently Online: %s", tableHelper.getCount(Players))
+    
+    replyToDiscord = playersOnline .. "" .. replyToDiscord .. "```"
+    IrcBridge.SendMessage(replyToDiscord)
+    
+  end
+  
+  --if command == "/COMMAND" then
+  --  validCommand = true
+  --  tes3mp.LogMessage(enumerations.log.INFO, "[Discord Command]: /COMMAND\n")
+  --end
+  
+  return validCommand
+end
+
 IrcBridge.RecvMessage = function()
 	local message
+  local valid = false
+  
+	s:hook("OnChat",function(user, alertChannel, message)
+		if lastMessage ~= message and tableHelper.getCount(Players) > 0 then
+      tes3mp.LogMessage(enumerations.log.INFO, "[Discord Command]: sections 1\n")
+      local command = IrcBridge.messageIsCommand(message)
+      valid = false
+      tes3mp.LogMessage(enumerations.log.INFO, "[Discord Command]: command = " .. command .. "\n")
+      if command ~= "" then
+        valid = IrcBridge.runCommand(command) 
+        if valid == true then
+          lastMessage = message
+        end
+      end
+      if valid == false then
+        for pid, player in pairs(Players) do
+          if Players[pid] ~= nil and Players[pid]:IsLoggedIn() then
+            user.nick = string.gsub(user.nick, nickfilter, "")
+            tes3mp.SendMessage(pid, usrColor .. "[" .. user.nick .. "]" .. color.Default .. " " .. message .. "\n", true)
+            tes3mp.LogMessage(enumerations.log.INFO, "[" .. user.nick .. "]" .. " " .. message .. "\n")
+            lastMessage = message
+            break
+          end
+        end
+      end
+    end
+	end)
 
 	s:hook("OnChat",function(user, channel, message)
 		if lastMessage ~= message and tableHelper.getCount(Players) > 0 then
-			for pid, player in pairs(Players) do
-				if Players[pid] ~= nil and Players[pid]:IsLoggedIn() then
-					user.nick = string.gsub(user.nick, nickfilter, "")
-					tes3mp.SendMessage(pid, usrColor .. "[" .. user.nick .. "]" .. color.Default .. " " .. message .. "\n", true)
-					tes3mp.LogMessage(enumerations.log.INFO, "[" .. user.nick .. "]" .. " " .. message .. "\n")
-					lastMessage = message
-					break
-				end
-			end
-		end
-	end)
-
-	s:hook("OnChat",function(user, alertChannel, message)
-		if lastMessage ~= message and tableHelper.getCount(Players) > 0 then
-			for pid, player in pairs(Players) do
-				if Players[pid] ~= nil and Players[pid]:IsLoggedIn() then
-					user.nick = string.gsub(user.nick, nickfilter, "")
-					tes3mp.SendMessage(pid, usrColor .. "[" .. user.nick .. "]" .. color.Default .. " " .. message .. "\n", true)
-					tes3mp.LogMessage(enumerations.log.INFO, "[" .. user.nick .. "]" .. " " .. message .. "\n")
-					lastMessage = message
-					break
-				end
-			end
-		end
+      tes3mp.LogMessage(enumerations.log.INFO, "[Discord Command]: sections 1\n")
+      local command = IrcBridge.messageIsCommand(message)
+      valid = false
+      tes3mp.LogMessage(enumerations.log.INFO, "[Discord Command]: command = " .. command .. "\n")
+      if command ~= "" then
+        valid = IrcBridge.runCommand(command) 
+        if valid == true then
+          lastMessage = message
+        end
+      end
+      if valid == false then
+        for pid, player in pairs(Players) do
+          if Players[pid] ~= nil and Players[pid]:IsLoggedIn() then
+            user.nick = string.gsub(user.nick, nickfilter, "")
+            tes3mp.SendMessage(pid, usrColor .. "[" .. user.nick .. "]" .. color.Default .. " " .. message .. "\n", true)
+            tes3mp.LogMessage(enumerations.log.INFO, "[" .. user.nick .. "]" .. " " .. message .. "\n")
+            lastMessage = message
+            break
+          end
+        end
+      end
+    end
 	end)
 
 	tes3mp.RestartTimer(IRCTimerId, time.seconds(1))
 end
-
 IrcBridge.SendMessage = function(message)
 	s:sendChat(channel, message)
 end
@@ -337,3 +412,5 @@ customEventHooks.registerHandler("OnServerExit", function()
 	tes3mp.StopTimer(IRCTimerId)
 	s:shutdown()
 end)
+
+return IrcBridge
